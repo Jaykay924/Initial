@@ -1,61 +1,75 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Login from "./components/login"
+
+type User = {
+    username: string
+    posts: { text: string; date: string }[]
+    following: string[]
+}
+
+type FeedPost = {
+    text: string
+    date: string
+    author: string
+}
 
 export default function Home() {
-    const [username, setUsername] = useState("")
-    const [password, setPassword] = useState("")
     const [currentUser, setCurrentUser] = useState<string | null>(null)
-    const [users, setUsers] = useState<any[]>([])
+    const [allUsers, setAllUsers] = useState<User[]>([])
+    const [feedPosts, setFeedPosts] = useState<FeedPost[]>([])
     const [search, setSearch] = useState("")
     const [newPost, setNewPost] = useState("")
 
-    // Logout funkcija
-    function handleLogout() {
-        setCurrentUser(null)
-        setUsers([])
-        setUsername("")
-        setPassword("")
-        setSearch("")
-        setNewPost("")
-    }
-
-    // Login funkcija
-    async function handleLogin() {
+    async function handleLogin(username: string, password: string) {
         const res = await fetch("/api/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password }),
         })
+
         const data = await res.json()
 
         if (data.ok) {
             setCurrentUser(username)
-            loadUsers()
         } else {
             alert(data.message)
         }
     }
 
-    // Load all users
     async function loadUsers() {
         const res = await fetch("/api/users")
         const data = await res.json()
-        setUsers(data)
+        setAllUsers(data)
     }
 
-    // Toggle follow/unfollow
-    async function toggleFollow(targetUser: string) {
+    async function loadFeed() {
         if (!currentUser) return
+
+        const res = await fetch(`/api/feed?user=${currentUser}`)
+        const data = await res.json()
+
+        if (Array.isArray(data)) {
+            setFeedPosts(data)
+        } else {
+            setFeedPosts([])
+        }
+    }
+
+    async function handleFollow(targetUser: string) {
+        if (!currentUser) return
+
         await fetch("/api/follow", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ currentUser, targetUser }),
         })
-        loadUsers()
+
+        await loadUsers()
+        await loadFeed()
     }
 
-    // Post new feed
     async function handlePost() {
         if (!newPost.trim() || !currentUser) return
 
@@ -66,118 +80,107 @@ export default function Home() {
         })
 
         setNewPost("")
-        loadUsers()
+        await loadFeed()
     }
 
-    // Automatiškai load users jei prisijungęs
     useEffect(() => {
-        if (currentUser) loadUsers()
+        if (!currentUser) return
+
+        const init = async () => {
+            await loadUsers()
+            await loadFeed()
+        }
+
+        void init()
     }, [currentUser])
 
-    // Jei neprisijungęs -> rodom login
+
     if (!currentUser) {
-        return (
-            <div style={{ padding: "40px" }}>
-                <h1>Mini Facebook Login</h1>
-                <input
-                    placeholder="Username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                />
-                <br /><br />
-                <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                />
-                <br /><br />
-                <button onClick={handleLogin}>Login</button>
-            </div>
-        )
+        return <Login onLoginAction={handleLogin} />
     }
 
-    const me = users.find(u => u.username === currentUser)
 
-    const followingUsers = users.filter(u => me?.following.includes(u.username))
+    const me = allUsers.find(u => u.username === currentUser)
 
-    const notFollowingUsers = users.filter(
-        u =>
-            u.username !== currentUser &&
-            !me?.following.includes(u.username) &&
-            u.username.toLowerCase().includes(search.toLowerCase())
+    if (!me) return null
+
+    const followingUsers = allUsers.filter(u =>
+        me.following.includes(u.username)
     )
 
-    const feedPosts = followingUsers
-        .flatMap(u =>
-            u.posts.map((p: any) => ({
-                ...p,
-                author: u.username
-            }))
-        )
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    const notFollowingUsers = allUsers.filter(u =>
+        u.username !== currentUser &&
+        !me.following.includes(u.username) &&
+        u.username.toLowerCase().includes(search.toLowerCase())
+    )
 
     return (
         <>
             <div style={{ display: "flex", padding: "20px" }}>
-                {/* Kairė pusė */}
                 <div style={{ width: "30%" }}>
                     <h3>Users</h3>
+
                     <input
-                        placeholder="Search user..."
+                        placeholder="Search..."
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={e => setSearch(e.target.value)}
                         style={{ marginBottom: "10px", width: "100%" }}
                     />
+
                     {notFollowingUsers.map(u => (
                         <div key={u.username}>
                             {u.username}
-                            <button onClick={() => toggleFollow(u.username)}>Follow</button>
+                            <button onClick={() => handleFollow(u.username)}>
+                                Follow
+                            </button>
                         </div>
                     ))}
                 </div>
 
-                {/* Vidurys */}
                 <div style={{ width: "40%", padding: "0 20px" }}>
                     <h3>Feed</h3>
 
-                    {/* Naujas post */}
-                    <div style={{ marginBottom: "20px" }}>
-                        <textarea
-                            placeholder="What's on your mind?"
-                            value={newPost}
-                            onChange={(e) => setNewPost(e.target.value)}
-                            style={{ width: "100%", height: "60px" }}
-                        />
-                        <button onClick={handlePost} style={{ marginTop: "5px" }}>
-                            Post
-                        </button>
-                    </div>
+                    <textarea
+                        placeholder="What's on your mind?"
+                        value={newPost}
+                        onChange={e => setNewPost(e.target.value)}
+                        style={{ width: "100%", height: "60px" }}
+                    />
+
+                    <button
+                        onClick={handlePost}
+                        style={{ marginTop: "5px" }}
+                    >
+                        Post
+                    </button>
 
                     {feedPosts.map((post, i) => (
                         <div key={i} style={{ marginBottom: "10px" }}>
                             <strong>{post.author}</strong>
                             <p>{post.text}</p>
-                            <small>{new Date(post.date).toLocaleString()}</small>
+                            <small>
+                                {new Date(post.date).toLocaleString()}
+                            </small>
                         </div>
                     ))}
                 </div>
 
-                {/* Dešinė pusė */}
                 <div style={{ width: "30%" }}>
                     <h3>Following</h3>
+
                     {followingUsers.map(u => (
                         <div key={u.username}>
                             {u.username}
-                            <button onClick={() => toggleFollow(u.username)}>Unfollow</button>
+                            <button onClick={() => handleFollow(u.username)}>
+                                Unfollow
+                            </button>
                         </div>
                     ))}
                 </div>
             </div>
 
-            {/* Logout */}
             <button
-                onClick={handleLogout}
+                onClick={() => setCurrentUser(null)}
                 style={{
                     position: "fixed",
                     bottom: "20px",

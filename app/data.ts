@@ -1,4 +1,3 @@
-// /app/data.ts
 export type Post = {
     text: string
     date: string
@@ -8,12 +7,21 @@ export type User = {
     username: string
     password: string
     posts: Post[]
-    following: string[]
+    following: Set<string>
 }
 
-// Pradiniai vartotojai
-export const users: User[] = [
-    { username: "alice", password: "123", posts: [], following: [] },
-    { username: "bob", password: "456", posts: [], following: [] },
-    { username: "charlie", password: "789", posts: [], following: [] },
-]
+declare global {
+    var _users: Map<string, User> | undefined
+}
+
+export const users: Map<string, User> =
+    global._users ??
+    new Map([
+        ["alice", { username: "alice", password: "123", posts: [], following: new Set() }],
+        ["bob", { username: "bob", password: "456", posts: [], following: new Set() }],
+        ["charlie", { username: "charlie", password: "789", posts: [], following: new Set() }],
+    ])
+
+if (!global._users) {
+    global._users = users
+}

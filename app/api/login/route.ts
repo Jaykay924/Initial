@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
-import { users, User } from "../../data"
+import { users } from "../../data"
 
 export async function POST(req: NextRequest) {
     const { username, password } = await req.json()
+    if (!username || !password) return NextResponse.json({ ok: false, message: "Missing data" }, { status: 400 })
 
-    let user = users.find(u => u.username === username)
-
+    let user = users.get(username)
     if (!user) {
-        // Sukuriam naują vartotoją
-        user = { username, password, posts: [], following: [] }
-        users.push(user)
+        user = { username, password, posts: [], following: new Set() }
+        users.set(username, user)
         return NextResponse.json({ ok: true, message: "User created" })
     }
 
-    if (user.password !== password) {
-        return NextResponse.json({ ok: false, message: "Wrong password" })
-    }
+    if (user.password !== password) return NextResponse.json({ ok: false, message: "Wrong password" })
 
     return NextResponse.json({ ok: true, message: "Login successful" })
 }
