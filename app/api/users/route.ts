@@ -7,5 +7,6 @@ export async function GET() {
         posts: u.posts,
         following: Array.from(u.following),
     }))
+
     return NextResponse.json(allUsers)
 }
